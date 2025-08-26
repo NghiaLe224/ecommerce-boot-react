@@ -1,5 +1,6 @@
 package com.fortune.project.security.jwt;
 
+import io.jsonwebtoken.ExpiredJwtException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -28,7 +29,8 @@ public class JWTAuthenticationFilter extends OncePerRequestFilter {
             "/v3/api-docs/**",
             "/swagger-ui/**",
             "/h2-console/**",
-            "/images/**"
+            "/images/**",
+            "/error"
     );
 
     public JWTAuthenticationFilter(JwtService jwtService, UserDetailsService userDetailsService) {
@@ -52,21 +54,28 @@ public class JWTAuthenticationFilter extends OncePerRequestFilter {
             throws ServletException, IOException {
 
         String header = request.getHeader("Authorization");
-        if(StringUtils.hasText(header) && header.startsWith("Bearer ")){
+        if (StringUtils.hasText(header) && header.startsWith("Bearer ")) {
             String token = header.substring(7);
-            try{
+            try {
                 var jws = jwtService.parse(token);
                 String username = jws.getPayload().getSubject();
                 var userDetails = userDetailsService.loadUserByUsername(username);
                 var auth = new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
                 auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
                 SecurityContextHolder.getContext().setAuthentication(auth);
-            }catch(Exception e){
-//                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            } catch (ExpiredJwtException e) {
+                SecurityContextHolder.clearContext();
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("{\"error\":\"TOKEN_EXPIRED\"}");
+                return;
+            } catch (Exception e) {
+                SecurityContextHolder.clearContext();
+                response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                response.getWriter().write("{\"error\":\"INVALID_TOKEN\"}");
+                return;
             }
         }
         filterChain.doFilter(request, response);
-
     }
 
 }

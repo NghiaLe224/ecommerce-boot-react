@@ -1,7 +1,8 @@
 package com.fortune.project.service.impl;
 
-import com.fortune.project.dto.CartItemResponse;
-import com.fortune.project.dto.CartResponse;
+import com.fortune.project.dto.request.cart.CartItemDTO;
+import com.fortune.project.dto.response.cart.CartItemResponse;
+import com.fortune.project.dto.response.cart.CartResponse;
 import com.fortune.project.dto.response.common.ApiResponse;
 import com.fortune.project.dto.response.common.PagingResponse;
 import com.fortune.project.entity.CartEntity;
@@ -12,6 +13,7 @@ import com.fortune.project.exception.ResourceNotFoundException;
 import com.fortune.project.repository.CartItemRepository;
 import com.fortune.project.repository.CartRepository;
 import com.fortune.project.repository.ProductRepository;
+import com.fortune.project.repository.UserRepository;
 import com.fortune.project.service.CartService;
 import com.fortune.project.util.AuthUtil;
 import jakarta.transaction.Transactional;
@@ -23,6 +25,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -33,60 +36,73 @@ public class CartServiceImpl implements CartService {
     private final CartRepository cartRepository;
     private final AuthUtil authUtil;
     private final CartItemRepository cartItemRepository;
+    private final UserRepository userRepository;
 
     @Override
     public ApiResponse<?> addToCart(Long productId, Integer quantity, String email) {
-        //find Product
+        // 1. Tìm sản phẩm
         ProductEntity product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "Product id", productId));
+
         if (product.getStock() < quantity) {
             throw new ApiException("Sufficient stock");
         }
 
-        //find cart of user by Email
+        // 2. Lấy/tạo giỏ hàng người dùng
         CartEntity cart = cartRepository.findByUser_email(email)
                 .orElseGet(() -> {
-                    CartEntity c = new CartEntity();
-                    c.setUser(authUtil.loggedInUser());
-                    return cartRepository.save(c);
+                    CartEntity newCart = new CartEntity();
+                    newCart.setUser(authUtil.loggedInUser());
+                    return cartRepository.save(newCart);
                 });
 
-        //add product to CartItem if existed or increase the quantity
-        CartItemEntity cartItem = cart.getCartItems().stream()
-                .filter(cartIT -> cartIT.getProduct().getId().equals(productId))
-                .findFirst().orElseGet(() -> {
-                    CartItemEntity newCartItem = new CartItemEntity();
-                    newCartItem.setProduct(product);
-                    newCartItem.setQuantity(quantity);
-                    newCartItem.setSnapshotPrice(product.getSpecialPrice());
-                    newCartItem.setCart(cart);
-                    return newCartItem;
-                });
+        // 3. Kiểm tra sản phẩm đã có trong giỏ chưa
+        Optional<CartItemEntity> optionalItem = cart.getCartItems().stream()
+                .filter(i -> i.getProduct().getId().equals(productId))
+                .findFirst();
 
-        cartItem.setQuantity(cartItem.getQuantity() + quantity);
+        CartItemEntity cartItem = optionalItem.orElseGet(() -> {
+            CartItemEntity newItem = new CartItemEntity();
+            newItem.setProduct(product);
+            newItem.setSnapshotPrice(product.getSpecialPrice());
+            newItem.setCart(cart);
+            newItem.setQuantity(0); // bắt đầu từ 0
+            newItem.setSnapshotName(product.getName());
+            return newItem;
+        });
+
+        // 4. Cập nhật số lượng
+        int updatedQuantity = cartItem.getQuantity() + quantity;
+        cartItem.setQuantity(updatedQuantity);
+
+        // 5. Tính lại subTotal và finalPrice
+        double updatedPrice = cartItem.getSnapshotPrice() * updatedQuantity;
+        cartItem.setSubTotal(updatedPrice);
+        cartItem.setFinalPrice(updatedPrice); // nếu có chiết khấu riêng thì xử lý khác
+
         cartItemRepository.save(cartItem);
 
-        //update cart with new total price
-        cart.setTotalPrice(cart.getTotalPrice() + (product.getPrice() * quantity));
+        // 6. Tính lại tổng giỏ
+        List<CartItemEntity> allItems = cartItemRepository.findByCart_Id(cart.getId());
+
+        double totalPrice = allItems.stream()
+                .mapToDouble(item -> item.getSnapshotPrice() * item.getQuantity())
+                .sum();
+
+        cart.setTotalPrice(totalPrice);
         cartRepository.save(cart);
 
-        //response to font-end
-        cart.getCartItems().add(cartItem);
-        List<CartItemResponse> cartItems = cart.getCartItems().stream()
-                .map(cartItemEntity -> {
-                    CartItemResponse cartItemResponse = new CartItemResponse();
-                    cartItemResponse.setProductId(cartItemEntity.getProduct().getId());
-                    cartItemResponse.setName(cartItemEntity.getProduct().getName());
-                    cartItemResponse.setImageUrl(cartItemEntity.getProduct().getImg());
-                    cartItemResponse.setSnapshotPrice(cartItemEntity.getSnapshotPrice());
-                    cartItemResponse.setQuantity(cartItemEntity.getQuantity());
-                    cartItemResponse.setSubTotal(cartItemEntity.getSnapshotPrice() * cartItemEntity.getQuantity());
-                    return cartItemResponse;
-                }).toList();
-
-        Double totalPrice = cartItems.stream()
-                .mapToDouble(CartItemResponse::getSubTotal)
-                .sum();
+        // 7. Build response
+        List<CartItemResponse> cartItems = allItems.stream().map(item -> {
+            CartItemResponse resp = new CartItemResponse();
+            resp.setProductId(item.getProduct().getId());
+            resp.setName(item.getProduct().getName());
+            resp.setImageUrl(item.getProduct().getImage());
+            resp.setSnapshotPrice(item.getSnapshotPrice());
+            resp.setQuantity(item.getQuantity());
+            resp.setSubTotal(item.getSnapshotPrice() * item.getQuantity());
+            return resp;
+        }).toList();
 
         CartResponse<List<CartItemResponse>> cartResponse = new CartResponse<>(
                 cart.getId(),
@@ -94,17 +110,19 @@ public class CartServiceImpl implements CartService {
                 cartItems,
                 totalPrice
         );
+
         return new ApiResponse<>("Product added success", cartResponse, LocalDateTime.now());
     }
 
+
     @Override
-    public ApiResponse<?> viewCart(Long id, Pageable pageable) {
+    public ApiResponse<?> viewCart(Long id) {
         CartEntity cart = cartRepository.findByUser_id(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Cart", "user id", id));
 
-        Page<CartItemEntity> pagedCartItems = cartItemRepository.findByCart_id(cart.getId(), pageable);
+        List<CartItemEntity> CartItems = cartItemRepository.findByCart_id(cart.getId());
 
-        List<CartItemResponse> cartItemResponses = pagedCartItems.getContent().stream()
+        List<CartItemResponse> cartItemResponses = CartItems.stream()
                 .map(cartItem -> {
                     ProductEntity product = cartItem.getProduct();
                     boolean deleted = (product == null);
@@ -114,9 +132,9 @@ public class CartServiceImpl implements CartService {
                     Double subTotal = cartItem.getSnapshotPrice() * cartItem.getQuantity();
 
                     return new CartItemResponse(
-                            cartItem.getId(),
+                            deleted ? null : product.getId(),
                             deleted ? cartItem.getSnapshotName() + " (Deleted)" : product.getName(),
-                            deleted ? "/img/default.png" : product.getImg(),
+                            deleted ? "/uploads/images/placeholder.png" : product.getImage(),
                             cartItem.getSnapshotPrice(),
                             cartItem.getQuantity(),
                             null,
@@ -130,17 +148,10 @@ public class CartServiceImpl implements CartService {
                 .mapToDouble(item -> item.getSnapshotPrice() * item.getQuantity())
                 .sum();
 
-        Page<CartItemResponse> pageResult = new PageImpl<>(
-                cartItemResponses,
-                pageable,
-                pagedCartItems.getTotalElements()
-        );
-        PagingResponse<CartItemResponse> pagingResponse = new PagingResponse<>(pageResult);
-
-        CartResponse<PagingResponse<CartItemResponse>> cartResponse = new CartResponse<>(
+        CartResponse<List<CartItemResponse>> cartResponse = new CartResponse<>(
                 cart.getId(),
                 cart.getUser().getId(),
-                pagingResponse,
+                cartItemResponses,
                 totalPrice
         );
         return new ApiResponse<>("Fetched cart successfully", cartResponse, LocalDateTime.now());
@@ -164,7 +175,7 @@ public class CartServiceImpl implements CartService {
                                 return new CartItemResponse(
                                         cartItem.getId(),
                                         deleted ? cartItem.getSnapshotName() : product.getName(),
-                                        deleted ? "/img/default.png" : product.getImg(),
+                                        deleted ? "/img/default.png" : product.getImage(),
                                         cartItem.getSnapshotPrice(),
                                         cartItem.getQuantity(),
                                         null,
@@ -197,4 +208,70 @@ public class CartServiceImpl implements CartService {
         return new ApiResponse<>("Fetched all cart successfully", pagingResponse, LocalDateTime.now());
     }
 
+    @Override
+    public void updateItemQuantity(Long id, Long productId, int quantity) {
+        CartEntity cart = cartRepository.findByUser_id(id).orElseThrow(() -> new ResourceNotFoundException("Cart", "user id", id));
+
+         Optional<CartItemEntity> optionalItem = cart.getCartItems().stream().filter(cartItem -> cartItem.getProduct().getId().equals(productId)).findFirst();
+
+        if(optionalItem.isPresent()){
+            if(quantity <= 0){
+                cart.removeItem(productId);
+            }else{
+                optionalItem.get().updateQuantity(quantity);
+            }
+        }else{
+            if(quantity > 0){
+                ProductEntity product = productRepository.findById(productId).orElseThrow(() -> new ResourceNotFoundException("Product", "product id", productId));
+                cart.addItem(product, quantity);
+            }
+        }
+
+        cartRepository.save(cart);
+    }
+
+    @Override
+    public void removeItem(Long id, Long productId) {
+        CartEntity cart = cartRepository.findByUser_id(id).orElseThrow(() -> new ResourceNotFoundException("Cart", "user id", id));
+
+        boolean removed = cart.getCartItems().removeIf(i -> i.getProduct().getId().equals(productId));
+
+        if (!removed) {
+            throw new ResourceNotFoundException("CartItem", "product id", productId);
+        }
+    }
+
+    @Override
+    public void syncCart(Long id, List<CartItemDTO> items) {
+        CartEntity cart = cartRepository.findByUser_id(id)
+                .orElseGet(() -> {
+                    CartEntity newCart = new CartEntity();
+                    newCart.setUser(userRepository.getReferenceById(id));
+                    return newCart;
+                });
+
+        cart.getCartItems().clear();
+
+        for (CartItemDTO itemDTO : items) {
+            ProductEntity product = productRepository.findById(itemDTO.getProductId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Product", "id", itemDTO.getProductId()));
+
+            cart.addItem(product, itemDTO.getQuantity());
+        }
+
+        cart.recalculateTotalPrice();
+        cartRepository.save(cart);
+    }
+
+    @Override
+    public void removeAllItems(Long id) {
+        CartEntity cart = cartRepository.findByUser_id(id).orElseThrow(() -> new ResourceNotFoundException("Cart", "user id", id));
+        if (cart.getCartItems().isEmpty()) {
+            cart.setTotalPrice(0.0);
+            return;
+        }
+        cart.getCartItems().forEach(item -> item.setCart(null));
+        cart.getCartItems().clear();
+        cart.recalculateTotalPrice();
+    }
 }

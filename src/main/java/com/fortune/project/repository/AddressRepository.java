@@ -16,4 +16,6 @@ public interface AddressRepository extends JpaRepository<AddressEntity, Long> {
     Page<AddressEntity> findByIsDeletedFalse(Pageable pageable);
 
     Optional<AddressEntity> findByIdAndIsDeletedFalse(Long addressId);
+
+    List<AddressEntity> findByUser_idAndIsDeletedFalse(Long userId);
 }

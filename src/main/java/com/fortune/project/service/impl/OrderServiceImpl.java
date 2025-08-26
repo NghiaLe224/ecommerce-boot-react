@@ -1,9 +1,8 @@
 package com.fortune.project.service.impl;
 
-import com.fortune.project.dto.request.order.CreateOrderRequest;
-import com.fortune.project.dto.request.order.OrderItemRequest;
-import com.fortune.project.dto.request.order.OrderResponse;
-import com.fortune.project.dto.request.order.PaymentResponse;
+import com.fortune.project.dto.request.order.*;
+import com.fortune.project.dto.response.common.ApiResponse;
+import com.fortune.project.dto.response.common.PagingResponse;
 import com.fortune.project.entity.*;
 import com.fortune.project.exception.ApiException;
 import com.fortune.project.exception.ResourceNotFoundException;
@@ -11,10 +10,16 @@ import com.fortune.project.repository.OrderRepository;
 import com.fortune.project.service.*;
 import com.fortune.project.util.AuthUtil;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -25,6 +30,7 @@ public class OrderServiceImpl implements OrderService {
     private final AddressService addressService;
     private final AuthUtil authUtil;
     private final ShipmentService shipmentService;
+    private final ModelMapper modelMapper;
 
     public OrderResponse createOrder(CreateOrderRequest request) {
         // Get current user
@@ -61,11 +67,24 @@ public class OrderServiceImpl implements OrderService {
         return OrderResponse.from(order, Collections.singletonList(paymentResponse));
     }
 
-    public List<OrderResponse> getOrdersForCurrentUser() {
+    public PagingResponse<OrderResponse> getOrdersForCurrentUser(Pageable pageable) {
         UserEntity user = authUtil.loggedInUser();
-        List<OrderEntity> orders = orderRepository.findByCustomer(user);
-        return orders.stream().map(OrderResponse::from).toList();
+
+        Page<OrderEntity> orders = orderRepository.findByCustomer(user, pageable);
+
+        Page<OrderResponse> orderResponses = orders.map(order ->
+                OrderResponse.from(
+                        order,
+                        order.getPayments()
+                                .stream()
+                                .map(PaymentResponse::from)
+                                .toList()
+                )
+        );
+
+        return new PagingResponse<>(orderResponses);
     }
+
 
     public OrderResponse getOrderDetail(Long orderId) {
         OrderEntity order = orderRepository.findById(orderId)
@@ -83,6 +102,39 @@ public class OrderServiceImpl implements OrderService {
         }
         order.setStatus(OrderStatus.CANCELLED);
         orderRepository.save(order);
+    }
+
+    @Override
+    public PagingResponse<OrderResponse> getAllOrders(Pageable pageable) {
+        Page<OrderEntity> orders = orderRepository.findAll(pageable);
+        Page<OrderResponse> res = orders
+                .map(o -> OrderResponse.from(o, o.getPayments().stream().map(PaymentResponse::from).toList()));
+        return new PagingResponse<>(res);
+    }
+
+    @Override
+    public ApiResponse<?> updateOrderStatus(UpdateOrderStatusRequest request) {
+        OrderEntity order = orderRepository.findById(request.getOrderId()).orElseThrow(() -> new ResourceNotFoundException("Order", "id", request.getOrderId()));
+
+        order.setStatus(request.getOrderStatus());
+        orderRepository.save(order);
+
+        // Return orderId and updated status back
+        Map<String, Object> responseData = new HashMap<>();
+        responseData.put("orderId", order.getId());
+        responseData.put("orderStatus", order.getStatus());
+
+        return new ApiResponse<>("Update order status successfully", responseData, LocalDateTime.now());
+    }
+
+    @Override
+    public PagingResponse<OrderResponse> getOrdersForSeller(Pageable pageable, Long sellerId) {
+        Page<OrderEntity> orders = orderRepository.findOrdersBySellerId(sellerId, pageable);
+        Page<OrderResponse> response = orders.map(order ->
+                OrderResponse.from(order, order.getPayments().stream()
+                        .map(PaymentResponse::from)
+                        .toList()));
+        return new PagingResponse<>(response);
     }
 
 

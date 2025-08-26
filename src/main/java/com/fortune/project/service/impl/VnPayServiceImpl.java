@@ -109,38 +109,33 @@ public class VnPayServiceImpl implements VnPayService {
     // Helper methods
     public static String buildHashData(Map<String, String> fields) {
         return fields.entrySet().stream()
-                .filter(entry -> !"vnp_SecureHash".equals(entry.getKey()) && !"vnp_SecureHashType".equals(entry.getKey()))
-                .map(entry -> urlEncode(entry.getKey()) + "=" + urlEncode(entry.getValue()))
+                .filter(e -> !"vnp_SecureHash".equals(e.getKey()) && !"vnp_SecureHashType".equals(e.getKey()))
+                .sorted(Map.Entry.comparingByKey())                 // ← thêm dòng này để sort theo key
+                .map(e -> e.getKey() + "=" + encodeValue(e.getValue())) // chỉ encode value
                 .collect(Collectors.joining("&"));
     }
 
-    private static String urlEncode(String value) {
+    private static String encodeValue(String v) {
         try {
-            return URLEncoder.encode(value, StandardCharsets.UTF_8.toString())
-                    .replace("+", "%20")
-                    .replace("*", "%2A")
-                    .replace("%7E", "~");
+            return URLEncoder.encode(v, java.nio.charset.StandardCharsets.US_ASCII.toString());
         } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("Lỗi URL encoding", e);
+            throw new RuntimeException(e);
         }
     }
 
     private String buildQueryString(Map<String, String> params) {
         return params.entrySet().stream()
-                .map(e -> urlEncode(e.getKey()) + "=" + urlEncode(e.getValue()))
+                .map(e -> encodeKey(e.getKey()) + "=" + encodeValue(e.getValue()))
                 .collect(Collectors.joining("&"));
     }
 
-//    private String urlEncode(String value) {
-//        try {
-//            return URLEncoder.encode(value, StandardCharsets.UTF_8.toString())
-//                    .replace("+", "%20")
-//                    .replace("*", "%2A")
-//                    .replace("%7E", "~");
-//        } catch (UnsupportedEncodingException e) {
-//            throw new RuntimeException("Lỗi URL encoding", e);
-//        }
-//    }
+    private static String encodeKey(String k) {
+        try {
+            return URLEncoder.encode(k, java.nio.charset.StandardCharsets.US_ASCII.toString());
+        } catch (UnsupportedEncodingException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     private String hmacSHA512(String key, String data) {
         try {

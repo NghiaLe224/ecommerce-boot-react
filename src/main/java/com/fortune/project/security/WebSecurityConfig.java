@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -61,7 +62,13 @@ public class WebSecurityConfig {
                 .exceptionHandling(exception -> exception.authenticationEntryPoint(unauthorizedHandler).accessDeniedHandler(accessDeniedHandler))
                 .sessionManagement(sessionConfig -> sessionConfig.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(authRequest -> authRequest
+                        // VNPay return (browser redirect) – GET
+                        .requestMatchers(HttpMethod.GET, "/api/payments/vnpay-return").permitAll()
+                        // VNPay IPN (server-to-server)
+                        .requestMatchers(HttpMethod.POST, "/api/payments/vnpay-ipn").permitAll()
                         .requestMatchers("/error", "/error/**").permitAll()
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
+                        .requestMatchers("/api/seller/**").hasAnyRole("ADMIN", "SELLER")
                         .requestMatchers("/api/auth/**",
                                 "/v3/api-docs/**",
                                 "/h2-console/**",
@@ -84,10 +91,11 @@ public class WebSecurityConfig {
         return(web -> web.ignoring().requestMatchers(
                 "/v2/api-docs",
                 "/configuration/ui",
-                "/swagger-resource/**",
+                "/swagger-resources/**",
                 "/configuration/security",
                 "swagger-ui.html",
-                "/webjars/**"
+                "/webjars/**",
+                "/uploads/**"
         ));
     }
 

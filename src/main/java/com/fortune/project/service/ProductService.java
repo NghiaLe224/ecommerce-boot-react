@@ -16,9 +16,9 @@ import java.util.List;
 
 public interface ProductService {
 
-    ApiResponse<ProductResponse> createProduct(Long categoryId, ProductRequest request);
+    ApiResponse<ProductResponse> createProduct(Long categoryId, ProductRequest request, MultipartFile imageFile);
 
-    ApiResponse<PagingResponse<ProductResponse>>  getAllProducts(Pageable pageable);
+    ApiResponse<PagingResponse<ProductResponse>>  getAllProducts(String category, String keyword, Pageable pageable);
 
     ApiResponse<PagingResponse<ProductResponse>> getAllProductsByCategoryId(Long categoryId, Pageable pageable);
 
@@ -33,4 +33,6 @@ public interface ProductService {
     ProductEntity findById(Long productId);
 
     List<OrderItemEntity> buildOrderItems(List<OrderItemRequest> items, OrderEntity order);
+
+    ApiResponse<PagingResponse<ProductResponse>>  getAllSellerProducts(String category, String keyword, Pageable pageable);
 }

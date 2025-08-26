@@ -1,10 +1,13 @@
 package com.fortune.project.controller;
 
 import com.fortune.project.constant.AppConstant;
+import com.fortune.project.dto.request.cart.CartItemQuantityUpdateDTO;
+import com.fortune.project.dto.request.cart.SyncCartRequest;
 import com.fortune.project.dto.response.common.ApiResponse;
 import com.fortune.project.security.service.UserDetailsImpl;
 import com.fortune.project.service.CartService;
 import com.fortune.project.util.PaginationUtils;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -38,19 +41,41 @@ public class CartController {
     ) {
         Pageable pageable = PaginationUtils.createPageable(page, size, sortBy, sortDir);
         ApiResponse<?> cartResponse = cartService.viewAllCart(pageable);
-        return new ResponseEntity<>(cartResponse, HttpStatus.FOUND);
+        return new ResponseEntity<>(cartResponse, HttpStatus.OK);
     }
 
     @GetMapping("/carts/users/cart")
     public ResponseEntity<?> viewCart(
-            @RequestParam(defaultValue = AppConstant.DEFAULT_PAGE + "", required = false) int page,
-            @RequestParam(defaultValue = AppConstant.DEFAULT_SIZE + "", required = false) int size,
-            @RequestParam(defaultValue = AppConstant.DEFAULT_SORT_DIR, required = false) String sortDir,
-            @RequestParam(defaultValue = AppConstant.DEFAULT_SORT_BY_ID, required = false) String sortBy,
             @AuthenticationPrincipal UserDetailsImpl userDetails
     ) {
-        Pageable pageable = PaginationUtils.createPageable(page, size, sortBy, sortDir);
-        ApiResponse<?> response = cartService.viewCart(userDetails.getId(), pageable);
-        return new ResponseEntity<>(response, HttpStatus.FOUND);
+        ApiResponse<?> response = cartService.viewCart(userDetails.getId());
+        return new ResponseEntity<>(response, HttpStatus.OK);
+    }
+
+    @PutMapping("/carts/items")
+    public ResponseEntity<Void> updateItemQuantity(@AuthenticationPrincipal UserDetailsImpl user,
+                                                   @Valid @RequestBody CartItemQuantityUpdateDTO request) {
+        cartService.updateItemQuantity(user.getId(), request.getProductId(), request.getQuantity());
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("carts/items/{productId}")
+    public ResponseEntity<Void> removeItem(@AuthenticationPrincipal UserDetailsImpl user,
+                                           @PathVariable Long productId) {
+        cartService.removeItem(user.getId(), productId);
+        return ResponseEntity.ok().build();
+    }
+
+    @PutMapping("/carts/sync")
+    public ResponseEntity<Void> syncCart(@AuthenticationPrincipal UserDetailsImpl user,
+                                         @RequestBody @Valid SyncCartRequest request) {
+        cartService.syncCart(user.getId(), request.getItems());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/carts/items")
+    public ResponseEntity<Void> removeAllItems(@AuthenticationPrincipal UserDetailsImpl user){
+        cartService.removeAllItems(user.getId());
+        return ResponseEntity.noContent().build();
     }
 }

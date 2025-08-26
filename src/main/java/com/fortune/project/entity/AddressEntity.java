@@ -30,23 +30,15 @@ public class AddressEntity extends BaseEntity {
     private String phoneNumber;
 
     @NotBlank
-    @Size(min = 5, message = "Street name must be at least 5 characters")
-    private String street;
-
-    private String buildingName;
+    @Size(min = 5, message = "Street address must be at least 5 characters")
+    private String streetAddress;
 
     @NotBlank
     private String ward;
 
     private String city;
 
-    private String country;
-
     private Boolean isDefault = false;
-
-    @ManyToOne
-    @JoinColumn(name = "district_id")
-    private DistrictEntity district;
 
     @JsonProperty(access = JsonProperty.Access.WRITE_ONLY)
     @ManyToOne

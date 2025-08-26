@@ -24,4 +24,27 @@ public class CartEntity extends BaseEntity{
     private List<CartItemEntity> cartItems = new ArrayList<>();
 
     private Double totalPrice = 0.0;
+
+    public void removeItem(Long productId) {
+        cartItems.removeIf(cartItem -> cartItem.getProduct().getId().equals(productId));
+    }
+
+    public void addItem(ProductEntity product, int quantity) {
+        CartItemEntity cartItem = new CartItemEntity();
+        cartItem.setCart(this);
+        cartItem.setProduct(product);
+        cartItem.setQuantity(quantity);
+        cartItem.setSnapshotPrice(product.getSpecialPrice());
+        cartItem.setSnapshotName(product.getName());
+        cartItem.setSubTotal(product.getSpecialPrice() * quantity);
+        cartItem.setFinalPrice(product.getSpecialPrice() * quantity);
+        cartItems.add(cartItem);
+    }
+
+    public void recalculateTotalPrice() {
+        this.totalPrice = cartItems.stream()
+                .mapToDouble(CartItemEntity::getFinalPrice)
+                .sum();
+    }
+
 }

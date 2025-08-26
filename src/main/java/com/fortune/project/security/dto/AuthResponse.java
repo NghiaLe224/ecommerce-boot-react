@@ -1,4 +1,6 @@
 package com.fortune.project.security.dto;
 
-public record AuthResponse(String accessToken, long expiresInSecond) {
+import com.fortune.project.dto.response.auth.UserResponse;
+
+public record AuthResponse(String accessToken, long expiresInSecond, UserResponse userResponse) {
 }

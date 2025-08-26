@@ -2,6 +2,7 @@ package com.fortune.project.dto.request.order;
 
 import com.fortune.project.dto.request.address.AddressResponse;
 import com.fortune.project.entity.OrderEntity;
+import com.fortune.project.entity.OrderStatus;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -16,7 +17,7 @@ import java.util.List;
 public class OrderResponse {
 
     private Long id;
-    private String status;
+    private OrderStatus status;
     private Double subtotal;
     private Double shippingFee;
     private Double total;
@@ -27,7 +28,7 @@ public class OrderResponse {
     private AddressResponse shippingAddress;
     private List<PaymentResponse> payment;
 
-    public OrderResponse(Long id, String status, Double subtotal, Double shippingFee, Double total, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public OrderResponse(Long id, OrderStatus status, Double subtotal, Double shippingFee, Double total, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.status = status;
         this.subtotal = subtotal;
@@ -40,7 +41,7 @@ public class OrderResponse {
     public static OrderResponse from(OrderEntity order){
         return new OrderResponse(
                 order.getId(),
-                order.getStatus().name(),
+                order.getStatus(),
                 order.getSubtotal(),
                 order.getShippingFee(),
                 order.getTotal(),
@@ -52,7 +53,7 @@ public class OrderResponse {
     public static OrderResponse from(OrderEntity order, List<PaymentResponse> paymentResponses) {
         return new OrderResponse(
                 order.getId(),
-                order.getStatus().name(),
+                order.getStatus(),
                 order.getSubtotal(),
                 order.getShippingFee(),
                 order.getTotal(),

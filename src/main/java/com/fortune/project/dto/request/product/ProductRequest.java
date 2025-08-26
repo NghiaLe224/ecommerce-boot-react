@@ -4,19 +4,21 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.web.multipart.MultipartFile;
 
 @AllArgsConstructor
 @NoArgsConstructor
 @Data
 public class ProductRequest {
-    private Long productId;
-    private String productName;
+    @JsonProperty("name")
+    private String name;
     @JsonProperty("description")
-    private String productDescription;
+    private String description;
     @JsonProperty("stock")
     private Integer stock;
     @JsonProperty("price")
-    private double productPrice;
+    private double price;
     @JsonProperty("discount")
-    private double productDiscount;
+    private double discount;
+    private double specialPrice;
 }

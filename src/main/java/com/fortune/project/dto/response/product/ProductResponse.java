@@ -11,8 +11,8 @@ public class ProductResponse {
     private Long id;
     private String name;
     private String description;
-    private String img;
-    private Integer quantity;
+    private String image;
+    private Integer stock;
     private double price;
     private double specialPrice;
 }

@@ -31,7 +31,7 @@ public class ProductEntity extends BaseEntity{
     private double specialPrice;
 
     @Column(name = "image_url")
-    private String img;
+    private String image;
 
     @ManyToOne
     @JoinColumn(name = "category_id")

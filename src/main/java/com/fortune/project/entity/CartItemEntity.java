@@ -30,4 +30,10 @@ public class CartItemEntity extends BaseEntity{
     private String snapshotName;
     private Double finalPrice;
     private Double subTotal;
+
+    public void updateQuantity(int quantity) {
+        this.setQuantity(quantity);
+        this.setFinalPrice(this.snapshotPrice * quantity);
+        this.setSubTotal(this.snapshotPrice * quantity);
+    }
 }

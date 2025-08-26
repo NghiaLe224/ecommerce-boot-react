@@ -9,23 +9,23 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class AddressResponse {
+    private Long id;
     private String fullName;
-    private String phone;
-    private String buildingName;
-    private String street;
+    private String phoneNumber;
+    private String streetAddress;
     private String ward;
-    private String district;
     private String city;
+    private Boolean isDefault;
 
     public static AddressResponse from(AddressEntity entity) {
         return new AddressResponse(
+                entity.getId(),
                 entity.getFullName(),
                 entity.getPhoneNumber(),
-                entity.getBuildingName(),
-                entity.getStreet(),
+                entity.getStreetAddress(),
                 entity.getWard(),
-                entity.getDistrict().getName(),
-                entity.getCity()
+                entity.getCity(),
+                entity.getIsDefault()
         );
     }
 }

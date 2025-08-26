@@ -30,7 +30,7 @@ public class AddressController {
     }
 
     @GetMapping("/addresses")
-    public ResponseEntity<?> viewAllAddress(
+    public ResponseEntity<?> viewAllAddresses(
             @RequestParam(defaultValue = AppConstant.DEFAULT_PAGE + "", required = false) int page,
             @RequestParam(defaultValue = AppConstant.DEFAULT_SIZE + "", required = false) int size,
             @RequestParam(defaultValue = AppConstant.DEFAULT_SORT_DIR, required = false) String sortDir,

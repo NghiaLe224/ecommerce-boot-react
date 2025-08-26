@@ -1,4 +1,4 @@
-package com.fortune.project.dto;
+package com.fortune.project.dto.response.cart;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;

@@ -6,23 +6,20 @@ import com.fortune.project.dto.request.product.ProductRequest;
 import com.fortune.project.dto.response.common.ApiResponse;
 import com.fortune.project.dto.response.common.PagingResponse;
 import com.fortune.project.dto.response.product.ProductResponse;
-import com.fortune.project.entity.CategoryEntity;
-import com.fortune.project.entity.OrderEntity;
-import com.fortune.project.entity.OrderItemEntity;
-import com.fortune.project.entity.ProductEntity;
+import com.fortune.project.entity.*;
 import com.fortune.project.exception.ApiException;
 import com.fortune.project.exception.ResourceNotFoundException;
 import com.fortune.project.repository.CategoryRepository;
 import com.fortune.project.repository.ProductRepository;
 import com.fortune.project.service.ProductService;
 import com.fortune.project.service.filestorage.FileStorageService;
+import com.fortune.project.util.AuthUtil;
 import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -35,49 +32,97 @@ public class ProductServiceImpl implements ProductService {
     private final ProductRepository productRepository;
     private final ModelMapper modelMapper;
     private final CategoryRepository categoryRepository;
-    @Value("${app.file.upload-dir}")
-    private String path;
     private final FileStorageService fileStorageService;
+    private final AuthUtil authUtil;
 
-    public ProductServiceImpl(ProductRepository repo, ModelMapper modelMapper, CategoryRepository categoryRepository, FileStorageService fileStorageService) {
+    public ProductServiceImpl(ProductRepository repo, ModelMapper modelMapper, CategoryRepository categoryRepository, FileStorageService fileStorageService, AuthUtil authUtil) {
         this.modelMapper = modelMapper;
         this.productRepository = repo;
         this.categoryRepository = categoryRepository;
         this.fileStorageService = fileStorageService;
+        this.authUtil = authUtil;
     }
 
     @Override
-    public ApiResponse<ProductResponse> createProduct(Long categoryId, ProductRequest request) {
+    public ApiResponse<ProductResponse> createProduct(
+            Long categoryId,
+            ProductRequest request,
+            MultipartFile imageFile) {
+
         CategoryEntity category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Category", "categoryId", categoryId
                 ));
+
         boolean productExist = category.getProducts()
                 .stream()
-                .anyMatch(p -> p.getName().equals(request.getProductName()));
+                .anyMatch(p -> p.getName().equalsIgnoreCase(request.getName()));
 
         if (productExist) {
-            throw new ApiException("Product with name " + request.getProductName() + " is already exist!", "Product existed!");
+            throw new ApiException(
+                    "Product with name " + request.getName() + " already exists!",
+                    "Product existed!"
+            );
         }
-        ProductEntity productToCreated = modelMapper.map(request, ProductEntity.class);
-        productToCreated.setImg(ProductConstant.DEFAULT_IMAGE);
-        productToCreated.setCategory(category);
-        productToCreated.setSpecialPrice(
-                request.getProductPrice() - (request.getProductDiscount() * 0.01) * request.getProductPrice());
-        ProductEntity createdProduct = productRepository.save(productToCreated);
-        return new ApiResponse<>("Product created",
-                modelMapper.map(createdProduct, ProductResponse.class), LocalDateTime.now()
-        );
 
+        ProductEntity productToCreated = modelMapper.map(request, ProductEntity.class);
+
+        productToCreated.setPrice(request.getPrice());
+        productToCreated.setSpecialPrice(request.getSpecialPrice());
+        productToCreated.setUser(authUtil.loggedInUser());
+
+        if (productToCreated.getSpecialPrice() <= 0 && request.getDiscount() > 0) {
+            double specialPrice = request.getPrice() - (request.getDiscount() * 0.01) * request.getPrice();
+            productToCreated.setSpecialPrice(specialPrice);
+        }
+
+        productToCreated.setCategory(category);
+
+        String imagePath;
+        if (imageFile != null && !imageFile.isEmpty()) {
+            try {
+                imagePath = fileStorageService.uploadImage(imageFile);
+            } catch (IOException e) {
+                throw new ApiException("Cannot upload image: " + e.getMessage());
+            }
+        } else {
+            imagePath = ProductConstant.DEFAULT_IMAGE;
+        }
+        productToCreated.setImage(imagePath);
+
+        ProductEntity createdProduct = productRepository.save(productToCreated);
+
+        ProductResponse response = modelMapper.map(createdProduct, ProductResponse.class);
+
+        return new ApiResponse<>(
+                "Product created successfully",
+                response,
+                LocalDateTime.now()
+        );
     }
 
+
     @Override
-    public ApiResponse<PagingResponse<ProductResponse>> getAllProducts(Pageable pageable) {
-        Page<ProductEntity> products = productRepository.findAll(pageable);
+    public ApiResponse<PagingResponse<ProductResponse>> getAllProducts(String category, String keyword, Pageable pageable) {
+        Specification<ProductEntity> spec = (root, query, cb) -> cb.conjunction(); // Tạo spec mặc định TRUE
+
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            spec = spec.and((root, query, cb) ->
+                    cb.like(cb.lower(root.get("name")), "%" + keyword.toLowerCase() + "%"));
+        }
+
+        if (category != null && !category.trim().isEmpty()) {
+            spec = spec.and((root, query, cb) ->
+                    cb.equal(root.get("category").get("name"), category));
+        }
+
+        Page<ProductEntity> products = productRepository.findAll(spec, pageable);
         Page<ProductResponse> productResponses = products.map(p -> modelMapper.map(p, ProductResponse.class));
+
         return new ApiResponse<>("All products fetched successfully",
                 new PagingResponse<>(productResponses), LocalDateTime.now());
     }
+
 
     @Override
     public ApiResponse<PagingResponse<ProductResponse>> getAllProductsByCategoryId(Long categoryId, Pageable pageable) {
@@ -108,11 +153,11 @@ public class ProductServiceImpl implements ProductService {
                 .orElseThrow(() -> new ResourceNotFoundException(
                         "Product", "productId", productId
                 ));
-        productFound.setName(request.getProductName());
-        productFound.setDescription(request.getProductDescription());
+        productFound.setName(request.getName());
+        productFound.setDescription(request.getDescription());
         productFound.setStock(request.getStock());
-        productFound.setPrice(request.getProductPrice());
-        productFound.setSpecialPrice(request.getProductPrice() - (request.getProductDiscount() * 0.01) * request.getProductPrice());
+        productFound.setPrice(request.getPrice());
+        productFound.setSpecialPrice(request.getPrice() - (request.getDiscount() * 0.01) * request.getPrice());
         ProductEntity updatedProduct = productRepository.save(productFound);
         ProductResponse responses = modelMapper.map(updatedProduct, ProductResponse.class);
         return new ApiResponse<>("Product with productId = " + productId + " updated successfully",
@@ -131,26 +176,35 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public ApiResponse<ProductResponse> updateProductImage(long productId, MultipartFile image) throws IOException {
-        ProductEntity foundedProduct = productRepository.findById(productId)
+    public ApiResponse<ProductResponse> updateProductImage(long productId, MultipartFile image) {
+        ProductEntity product = productRepository.findById(productId)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", "productId", productId));
 
-        String fileName = fileStorageService.uploadImage(path, image);
-        String fullImageUrl = ServletUriComponentsBuilder.fromCurrentContextPath()
-                .path("/images/")
-                .path(fileName)
-                .toUriString();
+        String imagePath;
 
-        foundedProduct.setImg(fullImageUrl);
+        if (image != null && !image.isEmpty()) {
+            // Có ảnh upload -> upload ảnh mới
+            try {
+                imagePath = fileStorageService.uploadImage(image);
+            } catch (IOException e) {
+                throw new ApiException("Không thể upload ảnh: " + e.getMessage());
+            }
+        } else {
+            // Không có ảnh -> dùng ảnh mặc định
+            imagePath = ProductConstant.DEFAULT_IMAGE;
+        }
 
-        ProductEntity updatedProduct = productRepository.save(foundedProduct);
-        ProductResponse responses = modelMapper.map(updatedProduct, ProductResponse.class);
-        return new ApiResponse<>("Product image updated successfully", responses, LocalDateTime.now());
+        product.setImage(imagePath);
+        ProductEntity updated = productRepository.save(product);
+        ProductResponse response = modelMapper.map(updated, ProductResponse.class);
+
+        return new ApiResponse<>("Product image updated successfully", response, LocalDateTime.now());
     }
+
 
     @Override
     public ProductEntity findById(Long productId) {
-        return productRepository.findById(productId).orElseThrow(() -> new ResourceNotFoundException("Product","product id", productId));
+        return productRepository.findById(productId).orElseThrow(() -> new ResourceNotFoundException("Product", "product id", productId));
     }
 
     @Override
@@ -179,6 +233,16 @@ public class ProductServiceImpl implements ProductService {
         }
 
         return orderItems;
+    }
+
+    @Override
+    public ApiResponse<PagingResponse<ProductResponse>> getAllSellerProducts(String category, String keyword, Pageable pageable) {
+        UserEntity seller = authUtil.loggedInUser();
+        Page<ProductEntity> products = productRepository.findAllByUser(seller, pageable);
+
+        Page<ProductResponse> productResponses = products.map(p -> modelMapper.map(p, ProductResponse.class));
+        return new ApiResponse<>("All seller's product fetched successfully",
+                new PagingResponse<>(productResponses), LocalDateTime.now());
     }
 
 

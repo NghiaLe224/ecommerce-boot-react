@@ -14,6 +14,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import static com.fortune.project.constant.AppConstant.DEFAULT_SORT_BY_ID;
 import static com.fortune.project.constant.CategoryConstant.*;
 
 @RestController
@@ -31,7 +32,7 @@ public class CategoryController {
     public ResponseEntity<?> getAllCategories(
             @RequestParam(defaultValue = DEFAULT_PAGE + "", required = false) Integer page,
             @RequestParam(defaultValue = DEFAULT_SIZE + "", required = false) Integer size,
-            @RequestParam(defaultValue = DEFAULT_SORT_BY, required = false) String sortBy,
+            @RequestParam(defaultValue = "name", required = false) String sortBy,
             @RequestParam(defaultValue = DEFAULT_SORT_DIR, required = false) String sortDir
     ) {
         Sort sort = sortDir.equalsIgnoreCase("desc") ?
@@ -40,7 +41,7 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.getAllCategories(pageable));
     }
 
-    @PostMapping("/public/categories")
+    @PostMapping("/admin/categories")
     public ResponseEntity<?> createCategory(@Valid @RequestBody CategoryCreateRequest category) {
         ApiResponse<CategoryResponse> response = categoryService.createCategory(category);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
@@ -51,11 +52,11 @@ public class CategoryController {
         return ResponseEntity.ok(categoryService.deleteCategory(id));
     }
 
-    @PutMapping("/public/categories/{id}")
-    public ResponseEntity<String> updateCategory(@Valid @RequestBody CategoryUpdateRequest category,
+    @PutMapping("/admin/categories/{id}")
+    public ResponseEntity<?> updateCategory(@Valid @RequestBody CategoryUpdateRequest category,
                                                  @PathVariable Long id) {
-        categoryService.updateCategory(id, category);
-        return ResponseEntity.ok("Update category successfully!");
+        var res = categoryService.updateCategory(id, category);
+        return ResponseEntity.ok(res);
     }
 
 }
