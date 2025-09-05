@@ -1,0 +1,74 @@
+####################################
+# Build artifacts - Java (Maven)
+####################################
+target/
+*/target/
+*.class
+
+####################################
+# Build artifacts - Frontend
+####################################
+node_modules/
+dist/
+frontend/dist/
+frontend/.vite/
+
+####################################
+# IDEs & Editors
+####################################
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+####################################
+# System files
+####################################
+.DS_Store
+Thumbs.db
+
+####################################
+# Uploads (user uploaded files)
+####################################
+backend/uploads/
+backend/uploads/images/
+
+####################################
+# Spring Tool Suite / Eclipse
+####################################
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+####################################
+# NetBeans
+####################################
+nbproject/private/
+nbbuild/
+dist/
+nbdist/
+.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+####################################
+# Optional
+####################################
+*.log
+*.stackdump
+.env
+*.local
+
+
+HELP.md
