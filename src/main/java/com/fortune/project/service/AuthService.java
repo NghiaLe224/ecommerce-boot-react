@@ -6,6 +6,7 @@ import com.fortune.project.dto.response.common.PagingResponse;
 import com.fortune.project.security.dto.AuthResponse;
 import com.fortune.project.security.dto.LoginRequest;
 import com.fortune.project.security.dto.SignUpRequest;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -18,7 +19,7 @@ public interface AuthService {
 
     AuthResponse refreshToken(String refreshToken, HttpServletResponse res);
 
-    ApiResponse<?> logout(HttpServletResponse res);
+    ApiResponse<?> logout(HttpServletRequest req, HttpServletResponse res);
 
     PagingResponse<UserResponse> getAllSellers(Pageable pageable);
 

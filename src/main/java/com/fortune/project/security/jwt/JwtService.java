@@ -67,4 +67,16 @@ public class JwtService {
         return Jwts.parser().verifyWith(key).build().parseSignedClaims(token);
     }
 
+    public String extractUsername(String token) {
+        try {
+            Jws<Claims> claimsJws = Jwts.parser()
+                    .verifyWith(key)
+                    .build()
+                    .parseSignedClaims(token);
+
+            return claimsJws.getPayload().getSubject();
+        } catch (JwtException e) {
+            throw new RuntimeException("Invalid JWT token", e);
+        }
+    }
 }

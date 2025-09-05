@@ -1,14 +1,17 @@
 package com.fortune.project.service.impl;
 
+import com.fortune.project.config.JwtProperties;
 import com.fortune.project.dto.response.auth.UserResponse;
 import com.fortune.project.dto.response.common.ApiResponse;
 import com.fortune.project.dto.response.common.PagingResponse;
 import com.fortune.project.entity.AppRole;
+import com.fortune.project.entity.RefreshTokenEntity;
 import com.fortune.project.entity.RoleEntity;
 import com.fortune.project.entity.UserEntity;
 import com.fortune.project.exception.ApiException;
 import com.fortune.project.exception.EmailAlreadyExistsException;
 import com.fortune.project.exception.ResourceNotFoundException;
+import com.fortune.project.repository.RefreshTokenRepository;
 import com.fortune.project.repository.RoleRepository;
 import com.fortune.project.repository.UserRepository;
 import com.fortune.project.security.dto.AuthResponse;
@@ -17,12 +20,12 @@ import com.fortune.project.security.dto.SignUpRequest;
 import com.fortune.project.security.jwt.JwtService;
 import com.fortune.project.security.service.UserDetailsImpl;
 import com.fortune.project.service.AuthService;
+import com.fortune.project.util.AuthUtil;
 import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
-import org.modelmapper.ModelMapper;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
@@ -34,6 +37,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.List;
@@ -49,18 +53,9 @@ public class AuthServiceImpl implements AuthService {
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
     private final RoleRepository roleRepository;
-    private final ModelMapper modelMapper;
-
-    @Value("${app.jwt.refresh-cookie-name}")
-    private String refreshCookieName;
-    @Value("${app.jwt.refresh-token-ttl}")
-    private long refreshTtl;
-    @Value("${app.jwt.refresh-cookie-domain}")
-    private String cookieDomain;
-    @Value("${app.jwt.refresh-cookie-secure}")
-    private boolean cookieSecure;
-    @Value("${app.jwt.refresh-cookie-samesite}")
-    private String cookieSameSite;
+    private final JwtProperties jwtProperties;
+    private final RefreshTokenRepository refreshTokenRepository;
+    private final AuthUtil authUtil;
 
     @Override
     public ResponseEntity<AuthResponse> authenticateUser(LoginRequest loginRequest, HttpServletResponse res) {
@@ -84,8 +79,19 @@ public class AuthServiceImpl implements AuthService {
         String access = jwtService.generateAccessToken(principal.getUsername(), authorities);
         String refresh = jwtService.generateRefreshToken(principal.getUsername(), UUID.randomUUID().toString());
 
-        setRefreshCookie(res, refresh, refreshTtl);
-        long expiresIn = Duration.ofSeconds(900).toSeconds();
+        UserEntity user = userRepository.findByName(principal.getUsername()).orElseThrow(() -> new ResourceNotFoundException("User", "username", principal.getUsername()));
+
+        RefreshTokenEntity rft = RefreshTokenEntity.builder()
+                .user(user)
+                .token(refresh)
+                .expiryDate(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()))
+                .revoked(false)
+                .build();
+
+        refreshTokenRepository.save(rft);
+
+        setRefreshCookie(res, refresh, jwtProperties.getRefreshTokenTtl());
+        long expiresIn = Duration.ofSeconds(jwtProperties.getAccessTokenTtl()).toSeconds();
 
         return ResponseEntity.ok(new AuthResponse(access, expiresIn,
                 new UserResponse(loginRequest.getUsername(), frontendRoles)));
@@ -134,8 +140,17 @@ public class AuthServiceImpl implements AuthService {
         String accessToken = jwtService.generateAccessToken(savedUser.getName(), authorities);
         String refreshToken = jwtService.generateRefreshToken(savedUser.getName(), UUID.randomUUID().toString());
 
-        setRefreshCookie(res, refreshToken, refreshTtl);
-        long expiresIn = Duration.ofSeconds(900).toSeconds();
+        RefreshTokenEntity rft = RefreshTokenEntity.builder()
+                .user(savedUser)
+                .token(refreshToken)
+                .expiryDate(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()))
+                .revoked(false)
+                .build();
+
+        refreshTokenRepository.save(rft);
+
+        setRefreshCookie(res, refreshToken, jwtProperties.getRefreshTokenTtl());
+        long expiresIn = Duration.ofSeconds(jwtProperties.getAccessTokenTtl()).toSeconds();
 
         return new ApiResponse<>("Created user success",
                 new AuthResponse(accessToken, expiresIn,
@@ -149,12 +164,14 @@ public class AuthServiceImpl implements AuthService {
             throw new ApiException("Missing refresh token");
         }
 
-        var jws = jwtService.parse(refreshToken);
-        if (!"refresh".equals(jws.getPayload().get("token_type", String.class))) {
-            throw new ApiException("Wrong token Type");
+        RefreshTokenEntity tokenEntity = refreshTokenRepository.findByToken(refreshToken)
+                .orElseThrow(() -> new ApiException("Invalid refresh token"));
+
+        if (tokenEntity.isRevoked() || tokenEntity.getExpiryDate().isBefore(Instant.now())) {
+            throw new ApiException("Refresh token expired or revoked");
         }
 
-        String username = jws.getPayload().getSubject();
+        String username = jwtService.parse(refreshToken).getPayload().getSubject();
         var user = userRepository.findByName(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
 
@@ -162,25 +179,53 @@ public class AuthServiceImpl implements AuthService {
                 .map(role -> "ROLE_" + role.getRoleName().name())
                 .toArray(String[]::new);
 
-        List<String> frontendRoles = user.getRoles().stream()
-                .map(role -> role.getRoleName().name())
-                .toList();
-
         String access = jwtService.generateAccessToken(username, authorities);
-        String newRefresh = jwtService.generateRefreshToken(username, UUID.randomUUID().toString());
-        setRefreshCookie(res, newRefresh, refreshTtl);
 
-        return new AuthResponse(access, 900, new UserResponse(username, frontendRoles));
+        String newRefresh = jwtService.generateRefreshToken(username, UUID.randomUUID().toString());
+
+        tokenEntity.setRevoked(true);
+        tokenEntity.setRevokedAt(Instant.now());
+        refreshTokenRepository.save(tokenEntity);
+
+        RefreshTokenEntity newEntity = RefreshTokenEntity.builder()
+                .user(user)
+                .token(newRefresh)
+                .expiryDate(Instant.now().plusSeconds(jwtProperties.getRefreshTokenTtl()))
+                .revoked(false)
+                .build();
+        refreshTokenRepository.save(newEntity);
+
+        setRefreshCookie(res, newRefresh, jwtProperties.getRefreshTokenTtl());
+
+        return new AuthResponse(access, (int) jwtProperties.getAccessTokenTtl(),
+                new UserResponse(username, user.getRoles().stream().map(r -> r.getRoleName().name()).toList()));
     }
 
+
     @Override
-    public ApiResponse<?> logout(HttpServletResponse res) {
-        Cookie cookie = new Cookie(refreshCookieName, "");
+    public ApiResponse<?> logout(HttpServletRequest req, HttpServletResponse res) {
+        String username;
+        String authHeader = req.getHeader("Authorization");
+        if (authHeader != null && authHeader.startsWith("Bearer ")) {
+            String token = authHeader.substring(7);
+            username = jwtService.extractUsername(token);
+        } else {
+            username = "";
+        }
+
+        UserEntity user = userRepository.findByName(username).orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+
+        if (user != null) {
+            refreshTokenRepository.deleteByUser(user);
+        }
+        refreshTokenRepository.deleteByUser(user);
+
+        Cookie cookie = new Cookie(jwtProperties.getRefreshCookieName(), "");
         cookie.setHttpOnly(true);
-        cookie.setSecure(cookieSecure);
-        cookie.setPath("/api/auth/refresh");
+        cookie.setSecure(jwtProperties.isRefreshCookieSecure());
+        cookie.setPath(jwtProperties.getRefreshCookiePath());
         cookie.setMaxAge(0);
-        cookie.setDomain(cookieDomain);
+        cookie.setDomain(jwtProperties.getRefreshCookieDomain());
         res.addCookie(cookie);
 
         return new ApiResponse<>(null, "Logged out", LocalDateTime.now());
@@ -215,14 +260,12 @@ public class AuthServiceImpl implements AuthService {
         Set<String> strRoles = signUpRequest.getRoles();
         Set<RoleEntity> roles = new HashSet<>();
 
-
         strRoles.forEach(roleStr -> {
             AppRole appRole = AppRole.valueOf(roleStr.toUpperCase());
             RoleEntity roleEntity = roleRepository.findByRoleName(appRole)
                     .orElseThrow(() -> new RuntimeException("Role not found"));
             roles.add(roleEntity);
         });
-
 
         user.setRoles(roles);
         UserEntity savedUser = userRepository.save(user);
@@ -237,15 +280,20 @@ public class AuthServiceImpl implements AuthService {
     }
 
     private void setRefreshCookie(HttpServletResponse res, String value, long ttlSeconds) {
-        Cookie cookie = new Cookie(refreshCookieName, value);
+        Cookie cookie = new Cookie(jwtProperties.getRefreshCookieName(), value);
         cookie.setHttpOnly(true);
-        cookie.setSecure(cookieSecure);
-        cookie.setPath("/api/auth/refresh");
+        cookie.setSecure(jwtProperties.isRefreshCookieSecure());
+        cookie.setPath(jwtProperties.getRefreshCookiePath());
         cookie.setMaxAge((int) ttlSeconds);
-        if (cookieDomain != null && !cookieDomain.isBlank()) cookie.setDomain(cookieDomain);
+        if (jwtProperties.getRefreshCookieDomain() != null && !jwtProperties.getRefreshCookieDomain().isBlank())
+            cookie.setDomain(jwtProperties.getRefreshCookieDomain());
 
         res.addHeader("Set-Cookie", String.format(
-                "%s=%s; Max-Age=%d; Path=/api/auth/refresh; Domain=%s; HttpOnly; Secure; SameSite=%s",
-                refreshCookieName, value, ttlSeconds, cookieDomain, cookieSameSite));
+                "%s=%s; Max-Age=%d; Path=%s; Domain=%s; HttpOnly; Secure; SameSite=%s",
+                jwtProperties.getRefreshCookieName(), value, ttlSeconds,
+                jwtProperties.getRefreshCookiePath(),
+                jwtProperties.getRefreshCookieDomain(),
+                jwtProperties.getRefreshCookieSameSite()
+        ));
     }
 }

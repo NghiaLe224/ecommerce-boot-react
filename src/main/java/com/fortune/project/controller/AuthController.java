@@ -1,5 +1,6 @@
 package com.fortune.project.controller;
 
+import com.fortune.project.config.JwtProperties;
 import com.fortune.project.dto.response.auth.UserResponse;
 import com.fortune.project.dto.response.common.ApiResponse;
 import com.fortune.project.dto.response.common.PagingResponse;
@@ -9,14 +10,18 @@ import com.fortune.project.security.dto.SignUpRequest;
 import com.fortune.project.security.dto.UserInfoResponse;
 import com.fortune.project.security.service.UserDetailsImpl;
 import com.fortune.project.service.AuthService;
+import com.fortune.project.service.impl.UserServiceImpl;
 import com.fortune.project.util.PaginationUtils;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDateTime;
@@ -27,13 +32,11 @@ import static com.fortune.project.constant.ProductConstant.*;
 
 @RestController
 @RequestMapping("/api")
+@RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
-
-    public AuthController(AuthService authService) {
-        this.authService = authService;
-    }
+    private final JwtProperties jwtProperties;
 
     @PostMapping("/auth/login")
     public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest, HttpServletResponse res) {
@@ -79,8 +82,8 @@ public class AuthController {
     }
 
     @PostMapping("/auth/logout")
-    public ResponseEntity<?> signOutUser(HttpServletResponse res) {
-        ApiResponse<?> response = authService.logout(res);
+    public ResponseEntity<?> signOutUser(HttpServletResponse res, HttpServletRequest req) {
+        ApiResponse<?> response = authService.logout(req, res);
         return new ResponseEntity<>(response, HttpStatus.OK);
     }
 
