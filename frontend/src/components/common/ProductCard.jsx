@@ -29,7 +29,7 @@ const ProductCard = ({
     const product = {
       id,
       name,
-      imageUrl: `http://localhost:8080${image}`,
+      imageUrl: image,
       description,
       quantity: 1,
       price,
@@ -38,7 +38,7 @@ const ProductCard = ({
     };
 
     try {
-      if (true) { // -------chỗ này đang hardcode để test nhớ sửa lại lấy token ở trên ---------
+      if (token) { // -------chỗ này đang hardcode để test nhớ sửa lại lấy token ở trên ---------
         // User đã login → gọi API server
         await dispatch(addToCartServer({ id, quantity: 1 })).unwrap();
         await dispatch(loadCartFromServer()).unwrap(); // để cập nhật số lượng ngay
@@ -78,7 +78,7 @@ const ProductCard = ({
       >
         <img
           className="w-full h-full cursor-pointer transition-transform duration-300 transform hover:scale-105"
-          src={`http://localhost:8080${image}`}
+          src={image}
           alt={name}
         ></img>
       </div>

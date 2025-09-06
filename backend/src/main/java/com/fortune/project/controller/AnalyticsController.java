@@ -1,6 +1,7 @@
 package com.fortune.project.controller;
 
 import com.fortune.project.dto.response.analytics.AnalyticsResponse;
+import com.fortune.project.service.AnalyticsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;

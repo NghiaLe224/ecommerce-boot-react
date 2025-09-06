@@ -1,4 +1,4 @@
-package com.fortune.project.controller;
+package com.fortune.project.service;
 
 import com.fortune.project.dto.response.analytics.AnalyticsResponse;
 

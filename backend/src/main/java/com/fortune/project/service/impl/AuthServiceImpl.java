@@ -35,6 +35,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.util.WebUtils;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -46,6 +47,7 @@ import java.util.UUID;
 
 @RequiredArgsConstructor
 @Service
+@Transactional
 public class AuthServiceImpl implements AuthService {
 
     private final UserRepository userRepository;
@@ -203,29 +205,25 @@ public class AuthServiceImpl implements AuthService {
 
 
     @Override
+    @Transactional
     public ApiResponse<?> logout(HttpServletRequest req, HttpServletResponse res) {
-        String username;
-        String authHeader = req.getHeader("Authorization");
-        if (authHeader != null && authHeader.startsWith("Bearer ")) {
-            String token = authHeader.substring(7);
-            username = jwtService.extractUsername(token);
-        } else {
-            username = "";
-        }
+        String refreshCookieName = jwtProperties.getRefreshCookieName();
+        Cookie rtCookie = WebUtils.getCookie(req, refreshCookieName);
 
-        UserEntity user = userRepository.findByName(username).orElseThrow(() -> new ResourceNotFoundException("User", "username", username));
+        if (rtCookie != null && rtCookie.getValue() != null && !rtCookie.getValue().isBlank()) {
+            String refreshToken = rtCookie.getValue();
 
-        if (user != null) {
-            refreshTokenRepository.deleteByUser(user);
+            refreshTokenRepository.findByToken(refreshToken).ifPresent(refreshTokenRepository::delete);
         }
-        refreshTokenRepository.deleteByUser(user);
 
         Cookie cookie = new Cookie(jwtProperties.getRefreshCookieName(), "");
         cookie.setHttpOnly(true);
         cookie.setSecure(jwtProperties.isRefreshCookieSecure());
         cookie.setPath(jwtProperties.getRefreshCookiePath());
         cookie.setMaxAge(0);
-        cookie.setDomain(jwtProperties.getRefreshCookieDomain());
+        if (jwtProperties.getRefreshCookieDomain() != null && !jwtProperties.getRefreshCookieDomain().isBlank()) {
+            cookie.setDomain(jwtProperties.getRefreshCookieDomain());
+        }
         res.addCookie(cookie);
 
         return new ApiResponse<>(null, "Logged out", LocalDateTime.now());

@@ -11,8 +11,8 @@ import com.fortune.project.exception.ApiException;
 import com.fortune.project.exception.ResourceNotFoundException;
 import com.fortune.project.repository.CategoryRepository;
 import com.fortune.project.repository.ProductRepository;
+import com.fortune.project.service.FileStorageService;
 import com.fortune.project.service.ProductService;
-import com.fortune.project.service.filestorage.FileStorageService;
 import com.fortune.project.util.AuthUtil;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
@@ -81,7 +81,7 @@ public class ProductServiceImpl implements ProductService {
         String imagePath;
         if (imageFile != null && !imageFile.isEmpty()) {
             try {
-                imagePath = fileStorageService.uploadImage(imageFile);
+                imagePath = fileStorageService.uploadFile(imageFile);
             } catch (IOException e) {
                 throw new ApiException("Cannot upload image: " + e.getMessage());
             }
@@ -185,7 +185,7 @@ public class ProductServiceImpl implements ProductService {
         if (image != null && !image.isEmpty()) {
             // Có ảnh upload -> upload ảnh mới
             try {
-                imagePath = fileStorageService.uploadImage(image);
+                imagePath = fileStorageService.uploadFile(image);
             } catch (IOException e) {
                 throw new ApiException("Không thể upload ảnh: " + e.getMessage());
             }

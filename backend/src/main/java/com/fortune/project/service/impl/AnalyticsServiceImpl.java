@@ -1,6 +1,6 @@
 package com.fortune.project.service.impl;
 
-import com.fortune.project.controller.AnalyticsService;
+import com.fortune.project.service.AnalyticsService;
 import com.fortune.project.dto.response.analytics.AnalyticsResponse;
 import com.fortune.project.repository.OrderRepository;
 import com.fortune.project.repository.ProductRepository;
