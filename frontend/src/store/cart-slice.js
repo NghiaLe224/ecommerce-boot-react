@@ -159,7 +159,7 @@ const cartSlice = createSlice({
           id: item.productId ?? `deleted-${item.name}`,
           productId: item.productId,
           name: item.name,
-          imageUrl: `http://localhost:8080${item.imageUrl}`,
+          imageUrl: item.imageUrl,
           snapshotPrice: item.snapshotPrice,
           quantity: item.quantity,
           deleted: item.deleted,

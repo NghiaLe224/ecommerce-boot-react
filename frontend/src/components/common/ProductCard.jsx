@@ -23,7 +23,7 @@ const ProductCard = ({
   const isAvailable = stock && Number(stock) > 0;
   const dispatch = useDispatch()
 
-  const token = useSelector((state) => state.auth.token); // kiểm tra login
+  const token = useSelector((state) => state.auth.token); 
 
   const handleAddToCart = async () => {
     const product = {
@@ -38,12 +38,10 @@ const ProductCard = ({
     };
 
     try {
-      if (token) { // -------chỗ này đang hardcode để test nhớ sửa lại lấy token ở trên ---------
-        // User đã login → gọi API server
+      if (token) { 
         await dispatch(addToCartServer({ id, quantity: 1 })).unwrap();
-        await dispatch(loadCartFromServer()).unwrap(); // để cập nhật số lượng ngay
+        await dispatch(loadCartFromServer()).unwrap(); 
       } else {
-        // User chưa login → lưu vào localStorage
         dispatch(addToCartLocal(product));
       }
       toast.success("Added to cart!");

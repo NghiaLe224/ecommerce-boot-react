@@ -8,7 +8,7 @@ import {
 } from "../../store/cart-slice";
 import { formatPrice } from "../../utils/formatPrice";
 import truncateText from "../../utils/truncateText";
-import toast from "react-hot-toast"; // dùng thư viện để thông báo lỗi
+import toast from "react-hot-toast"; 
 
 const ItemContent = ({ productId, name, imageUrl, snapshotPrice }) => {
   const dispatch = useDispatch();
@@ -21,16 +21,13 @@ const ItemContent = ({ productId, name, imageUrl, snapshotPrice }) => {
   const handleChangeQuantity = async (newQuantity) => {
     if (newQuantity < 1) return;
 
-    // 1. Optimistic update Redux ngay
     dispatch(setQuantityLocal({ id: productId, quantity: newQuantity }));
 
-    // 2. Gọi API để sync lên server
     try {
       await dispatch(
         updateQuantityServer({ productId, quantity: newQuantity })
       ).unwrap();
     } catch (err) {
-      // 3. Rollback nếu có lỗi
       dispatch(setQuantityLocal({ id: productId, quantity }));
       toast.error("Failed to update quantity. Please try again.");
     }

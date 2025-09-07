@@ -36,7 +36,7 @@ function ProductViewModal({ open, setOpen, product, isAvailable }) {
             >
               {image && (
                 <div className="flex justify-center aspect-[3/2]">
-                  <img src={`http://localhost:8080${image}`} alt={name}></img>
+                  <img src={image} alt={name}></img>
                 </div>
               )}
 

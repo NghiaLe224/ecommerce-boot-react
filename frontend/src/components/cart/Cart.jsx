@@ -13,7 +13,7 @@ const Cart = () => {
   const location = useLocation();
 
   useEffect(() => {
-    if (token && location.pathname === "/cart") { //ở đây đang gán cứng token là true
+    if (token && location.pathname === "/cart") { 
       dispatch(loadCartFromServer());
     }
   }, [dispatch, token, location.pathname]);
