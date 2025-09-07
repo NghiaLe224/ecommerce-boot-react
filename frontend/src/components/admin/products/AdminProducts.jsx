@@ -6,7 +6,7 @@ import { DataGrid } from "@mui/x-data-grid";
 import AddProductForm from "./AddProductForm";
 import toast from "react-hot-toast";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import ProductViewModal from "../../common/productViewModal";
+import ProductViewModal from "../../common/ProductViewModal";
 import DeleteModal from "../../common/DeleteModal";
 import Modal from "../../common/Modal";
 import { Loader } from "../../common/Loader";

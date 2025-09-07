@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { FaShoppingCart } from "react-icons/fa";
-import ProductViewModal from "./productViewModal";
+import ProductViewModal from "./ProductViewModal";
 import truncateText from "../../utils/truncateText";
 import { useDispatch, useSelector } from "react-redux";
 import { addToCartLocal, addToCartServer, loadCartFromServer } from "../../store/cart-slice";

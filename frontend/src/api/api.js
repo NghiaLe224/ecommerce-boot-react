@@ -1,8 +1,13 @@
 import axios from "axios";
 
+// Xác định baseURL phù hợp tùy môi trường
+const baseURL = import.meta.env.MODE === "development"
+  ? import.meta.env.VITE_BACK_END_URL || "http://localhost:8080/api"
+  : "/api";
+
 const api = axios.create({
-  baseURL: `${import.meta.env.VITE_BACK_END_URL}/api`,
-  withCredentials: true, 
+  baseURL,
+  withCredentials: true,
 });
 
 let isRefreshing = false;
@@ -45,12 +50,9 @@ api.interceptors.response.use(
 
       try {
         const res = await api.post("/auth/refresh");
-
         const newAccessToken = res.data.accessToken;
         localStorage.setItem("jwtToken", newAccessToken);
-
         api.defaults.headers.Authorization = `Bearer ${newAccessToken}`;
-
         onRefreshed(newAccessToken);
         return api(originalRequest);
       } catch (refreshError) {

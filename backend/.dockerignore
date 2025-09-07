@@ -1,0 +1,9 @@
+target
+.mvn
+.idea
+*.iml
+.git
+.gitignore
+**/*.log
+**/uploads
+**/node_modules
